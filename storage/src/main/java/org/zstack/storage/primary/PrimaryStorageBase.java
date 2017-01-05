@@ -915,6 +915,23 @@ public abstract class PrimaryStorageBase extends AbstractPrimaryStorage {
         final List<PrimaryStorageInventory> ctx = PrimaryStorageInventory.valueOf(Arrays.asList(self));
         FlowChain chain = FlowChainBuilder.newSimpleFlowChain();
         chain.setName(String.format("delete-primary-storage-%s", msg.getUuid()));
+
+        chain.then(new NoRollbackFlow() {
+            @Override
+            public void run(FlowTrigger trigger, Map data) {
+                APIChangePrimaryStorageStateMsg cmsg = new APIChangePrimaryStorageStateMsg();
+                cmsg.setUuid(msg.getUuid());
+                cmsg.setStateEvent(PrimaryStorageStateEvent.deleting.toString());
+                bus.makeTargetServiceIdByResourceUuid(cmsg, PrimaryStorageConstant.SERVICE_ID, msg.getUuid());
+                MessageReply reply = bus.call(cmsg);
+                if(!reply.isSuccess()) {
+                    trigger.fail(reply.getError());
+                } else {
+                    trigger.next();
+                }
+            }
+        });
+
         if (msg.getDeletionMode() == APIDeleteMessage.DeletionMode.Permissive) {
             chain.then(new NoRollbackFlow() {
                 @Override
